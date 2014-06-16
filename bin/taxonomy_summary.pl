@@ -85,21 +85,26 @@ if ($fh->open("< $infile")) {
     my $idcnt = 0;
     while (<$fh>) {
         chomp(my $val = $_);
-        $idstring .= $val . ",";
+        #$idstring .= $val . ",";
+        $idstring .= "&id=$val";
         ++$idcnt;
         last if ($debug && $idcnt >= 150);
     }
 
-    chop($idstring);        
+    #chop($idstring);        
+    #$idcnt = 201 if ($debug);
 
     my $ua = LWP::UserAgent->new();
-    $ua->agent("taxonomy_summary");
+    #$ua->agent("taxonomy_summary");
+    $ua->agent("eutils/taxonomy_summary");
+    my $base = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
     if ($idcnt < 200) {
 #        my $ua = LWP::UserAgent->new();
 #        $ua->agent("taxonomy_summary");
 
         #my $req = HTTP::Request->new(GET => "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id=$idstring");
-        my $req = HTTP::Request->new(POST => "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id=$idstring");
+        say $base . "efetch.fcgi?db=taxonomy&retmode=xml" . "$idstring" if ($debug);
+        my $req = HTTP::Request->new(GET => $base . "efetch.fcgi?db=taxonomy&retmode=xml&id=$idstring");
 
         my $res = $ua->request($req);
 
@@ -111,6 +116,23 @@ if ($fh->open("< $infile")) {
         }
     } else {
 
+        my $url = $base . "efetch.fcgi";
+        my $url_params = "db=taxonomy";
+
+        my $req = HTTP::Request->new(POST => $url);
+        $req->content_type('application/x-www-form-urlencoded');
+        $req->content($url_params . $idstring);
+
+        say $url . "?" . $url_params . $idstring if ($debug);
+
+        my $res = $ua->request($req);
+
+        if ($res ->is_success()) {
+            say $res->content() if ($debug);
+            say $outfh $res->content();
+        } else {
+            say "fail\n" . $res->status_line();
+        }
 
     }
 
