@@ -28,7 +28,7 @@ use HTTP::Request;
 use IO::File;
 use IO::Pipe;
 
-my ($debug,$verbose,$help,$infile,$outfile,$phylum,$class,$family,$species);
+my ($debug,$verbose,$help,$infile,$outfile,$order,$class,$family,$species,$genus);
 
 my $result = GetOptions(
     "debug"     =>  \$debug,
@@ -36,9 +36,10 @@ my $result = GetOptions(
     "help"      =>  \$help,
     "infile:s"    =>  \$infile,
     "outfile:s" =>  \$outfile,
-    "phylum"    =>  \$phylum,
     "class"     =>  \$class,
+    "order"    =>  \$order,
     "family"    =>  \$family,
+    "genus"     =>  \$genus,
     "species"   =>  \$species,
 
 );
@@ -57,9 +58,10 @@ sub help {
     "help"      =>  \$help,
     "infile:s"    =>  \$infile,
     "outfile:s" =>  \$outfile,
-    "phylum"    =>  \$phylum,
     "class"     =>  \$class,
+    "order"    =>  \$order,
     "family"    =>  \$family,
+    "genus"     =>  \$genus,
     "species"   =>  \$species,
 
 HELP
@@ -67,8 +69,8 @@ HELP
 }
 
 $infile = 'infile' unless ($infile);
-$outfile = 'outfile' unless ($outfile);
-$species = 1 unless ($phylum || $class || $family);
+$outfile = "outfile.$$" unless ($outfile);
+$species = 1 unless ( $class || $order || $family || $genus);
 
 my $fh = new IO::File;
 my $outfh = new IO::File;
@@ -83,6 +85,14 @@ my $idstring = '';
 if ($fh->open("< $infile")) {
 
     my $idcnt = 0;
+#    my %id = ();
+#    while (<$fh>) {
+#        chomp(my $val = $_);
+#        ++$id{$val};# increase tally by 1 for this ID
+#        ++$idcnt;
+#        last if ($debug && $idcnt >= 150);
+#    }
+
     while (<$fh>) {
         chomp(my $val = $_);
         #$idstring .= $val . ",";
@@ -139,14 +149,35 @@ if ($fh->open("< $infile")) {
     $fh->close();
 #    say "$idstring";
     my $pipe = new IO::Pipe;
-    #$pipe->reader("xml_grep --strict --text_only Lineage $outfile");
     if ($species) {
+
+        my $pipe2 = new IO::Pipe;
+        $pipe2->reader("xml_grep --strict --text_only --cond TaxaSet/Taxon/ScientificName $outfile");
+        my @species = <$pipe2>;
+
+        my $pipe3 = new IO::Pipe;
+        $pipe3->reader("xml_grep --strict --text_only --cond Lineage $outfile");
+        my @lineage = <$pipe3>;
+
+        open(TEMP,">","tempfile.$$");
+
+        for (my $i = 0; $i < scalar(@lineage); ++$i) {
+            chomp($lineage[$i]);
+            chomp($species[$i]);
+            say TEMP $lineage[$i] . "; " . $species[$i];
+        }
+
+        close(TEMP);
+
+        $pipe->reader("sort tempfile.$$ | uniq -c | sort -g -k 1 -r");
+
+    } elsif ($genus) {
         $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4,5,6,7 -d ';' | sort | uniq -c | sort -g -k 1 -r");
     } elsif ($family) {
         $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4,5,6 -d ';' | sort | uniq -c | sort -g -k 1 -r");
-    } elsif ($class) {
+    } elsif ($order) {
         $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4,5 -d ';' | sort | uniq -c | sort -g -k 1 -r");
-    } elsif ($phylum) {
+    } elsif ($class) {
         $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4 -d ';' | sort | uniq -c | sort -g -k 1 -r");
     }
     for my $line (<$pipe>) {
@@ -157,3 +188,5 @@ if ($fh->open("< $infile")) {
 }
 
 $outfh->close();
+unlink($outfile);
+unlink("tempfile.$$") if ($species);
