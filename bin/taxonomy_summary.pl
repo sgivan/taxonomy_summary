@@ -75,6 +75,7 @@ $species = 1 unless ( $class || $order || $family || $genus);
 my $fh = new IO::File;
 my $outfh = new IO::File;
 
+say "opening output file '$outfile'" if ($debug);
 if ($outfh->open("> $outfile")) {
 
 } else {
@@ -113,8 +114,10 @@ if ($fh->open("< $infile")) {
 #        $ua->agent("taxonomy_summary");
 
         #my $req = HTTP::Request->new(GET => "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id=$idstring");
-        say $base . "efetch.fcgi?db=taxonomy&retmode=xml" . "$idstring" if ($debug);
-        my $req = HTTP::Request->new(GET => $base . "efetch.fcgi?db=taxonomy&retmode=xml&id=$idstring");
+        #say $base . "efetch.fcgi?db=taxonomy&retmode=xml" . "$idstring" if ($debug);
+        say $base . "efetch.fcgi?db=protein&retmode=xml" . "$idstring" if ($debug);
+        #my $req = HTTP::Request->new(GET => $base . "efetch.fcgi?db=taxonomy&retmode=xml&id=$idstring");
+        my $req = HTTP::Request->new(GET => $base . "efetch.fcgi?db=protein&retmode=xml&id=$idstring");
 
         my $res = $ua->request($req);
 
@@ -127,7 +130,7 @@ if ($fh->open("< $infile")) {
     } else {
 
         my $url = $base . "efetch.fcgi";
-        my $url_params = "db=taxonomy";
+        my $url_params = "db=protein";
 
         my $req = HTTP::Request->new(POST => $url);
         $req->content_type('application/x-www-form-urlencoded');
@@ -147,16 +150,19 @@ if ($fh->open("< $infile")) {
     }
 
     $fh->close();
-#    say "$idstring";
+    if ($debug) {
+        say "$idstring";
+        exit();
+    }
     my $pipe = new IO::Pipe;
     if ($species) {
 
         my $pipe2 = new IO::Pipe;
-        $pipe2->reader("xml_grep --strict --text_only --cond TaxaSet/Taxon/ScientificName $outfile");
+        $pipe2->reader("xml_grep --strict --text_only --cond GBSeq_organism $outfile");
         my @species = <$pipe2>;
 
         my $pipe3 = new IO::Pipe;
-        $pipe3->reader("xml_grep --strict --text_only --cond Lineage $outfile");
+        $pipe3->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile");
         my @lineage = <$pipe3>;
 
         open(TEMP,">","tempfile.$$");
@@ -172,13 +178,13 @@ if ($fh->open("< $infile")) {
         $pipe->reader("sort tempfile.$$ | uniq -c | sort -g -k 1 -r");
 
     } elsif ($genus) {
-        $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4,5,6,7 -d ';' | sort | uniq -c | sort -g -k 1 -r");
+        $pipe->reader("xml_grep --strict --text_only GBSeq_taxonomy $outfile | cut -f 4,5,6,7 -d ';' | sort | uniq -c | sort -g -k 1 -r");
     } elsif ($family) {
-        $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4,5,6 -d ';' | sort | uniq -c | sort -g -k 1 -r");
+        $pipe->reader("xml_grep --strict --text_only GBSeq_taxonomy $outfile | cut -f 4,5,6 -d ';' | sort | uniq -c | sort -g -k 1 -r");
     } elsif ($order) {
-        $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4,5 -d ';' | sort | uniq -c | sort -g -k 1 -r");
+        $pipe->reader("xml_grep --strict --text_only GBSeq_taxonomy $outfile | cut -f 4,5 -d ';' | sort | uniq -c | sort -g -k 1 -r");
     } elsif ($class) {
-        $pipe->reader("xml_grep --strict --text_only Lineage $outfile | cut -f 4 -d ';' | sort | uniq -c | sort -g -k 1 -r");
+        $pipe->reader("xml_grep --strict --text_only GBSeq_taxonomy $outfile | cut -f 4 -d ';' | sort | uniq -c | sort -g -k 1 -r");
     }
     for my $line (<$pipe>) {
         print $line;
