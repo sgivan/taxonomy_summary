@@ -63,11 +63,11 @@ sub help {
     "help"      =>  \$help,
     "infile:s"    =>  \$infile,
     "outfile:s" =>  \$outfile,
-    "class"     =>  \$class,
-    "order"    =>  \$order,
-    "family"    =>  \$family,
-    "genus"     =>  \$genus,
-    "species"   =>  \$species,
+    "class"     =>  1 term
+    "order"     =>  2 terms 
+    "family"    =>  3 terms
+    "genus"     =>  4 terms, but usually doesn't work -- use --species
+    "species"   =>  list taxonomy terms to the species level
     "taxmap"    =>  print a table of gene ID -> taxonomy
     "dna"       =>  input list contains NCBI DNA ID's instead of protein ID's
 
@@ -79,6 +79,9 @@ $infile = 'infile' unless ($infile);
 $outfile = "outfile.$$" unless ($outfile);
 $species = 1 unless ( $class || $order || $family || $genus);
 my $db = $dna ? 'nucleotide' : 'protein';
+# registered eutils terms:
+my $email = 'givans@missouri.edu';
+my $tool = 'taxonomy_summary';
 
 my $fh = new IO::File;
 my $outfh = new IO::File;
@@ -128,7 +131,7 @@ if ($fh->open("< $infile")) {
     $ua->agent("eutils/taxonomy_summary");
     my $base = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
     if ($idcnt < 200) {
-        my $uri = URI->new($base . "efetch.fcgi?db=$db&retmode=xml&id=$idstring");
+        my $uri = URI->new($base . "efetch.fcgi?db=$db&retmode=xml&id=$idstring&email=$email&tool=$tool");
     #say $base . "efetch.fcgi?db=protein&retmode=xml" . "$idstring" if ($debug);
         say $uri->canonical() if ($debug);
         #my $req = HTTP::Request->new(GET => $base . "efetch.fcgi?db=protein&retmode=xml&id=$idstring");
@@ -146,7 +149,7 @@ if ($fh->open("< $infile")) {
 
         my $url = $base . "efetch.fcgi";
         #my $url_params = "db=$db&rettype=xml&retmode=xml&";# including rettype changes return content to include sequence data
-        my $url_params = "db=$db&retmode=xml&";
+        my $url_params = "email=$email&tool=$tool&db=$db&retmode=xml&";
 
         my $req = HTTP::Request->new(POST => $url);
         $req->content_type('application/x-www-form-urlencoded');
