@@ -229,7 +229,7 @@ if ($fh->open("< $infile")) {
 }
 
 $outfh->close();
-#unlink($outfile) unless ($debug);
+unlink($outfile) unless ($debug);
 unlink("tempfile.$$") if ($species);
 
 sub unique_count {
