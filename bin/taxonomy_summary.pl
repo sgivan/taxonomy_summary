@@ -98,6 +98,8 @@ if ($outfh->open("> $outfile")) {
 my $idstring = '';
 my @id = ();
 my %taxmap = ();
+my %unique_ids = ();
+my @unique_ids = ();
 my @tax_summary = ();
 my @line = ();
 my @all_line = ();
@@ -115,10 +117,12 @@ if ($fh->open("< $infile")) {
         }
         $idstring .= "&id=$val" if ($val =~ /\w+/);
         push(@id, $val);
+        ++$unique_ids{$val}->[0];
         ++$idcnt;
         last if ($debug && $idcnt >= 10);
     }
 
+    @unique_ids = keys(%unique_ids);
     my $ua = LWP::UserAgent->new();
     $ua->agent("eutils/taxonomy_summary");
     my $base = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
@@ -157,9 +161,11 @@ if ($fh->open("< $infile")) {
         my $req = HTTP::Request->new(POST => $url);
         $req->content_type('application/x-www-form-urlencoded');
 
-        my $setnum = 50;
+        my $setnum = 800;
         $outfh->close();
-        for (my $set = 0; $set < scalar(@id)/$setnum; ++$set) {
+        
+        #for (my $set = 0; $set < scalar(@id)/$setnum; ++$set) {
+        for (my $set = 0; $set < scalar(@unique_ids)/$setnum; ++$set) {
 
             $idstring = '';
             push(@sets,$set);
@@ -168,7 +174,7 @@ if ($fh->open("< $infile")) {
             $outfh->open("> $outfile_part");
 
             for (my $idx = $set * $setnum; $idx < ($set * $setnum) + $setnum; ++$idx) {
-                $idstring .= "&id=$id[$idx]" if ($id[$idx] && $id[$idx] =~ /\w+/);
+                $idstring .= "&id=$unique_ids[$idx]" if ($unique_ids[$idx] && $unique_ids[$idx] =~ /\w+/);
             }
 
             say "set $set idstring: '$idstring'" if ($debug);
@@ -180,7 +186,7 @@ if ($fh->open("< $infile")) {
             my $res = $ua->request($req);
 
             if ($res ->is_success()) {
-                say $res->content() if ($debug);
+                #say $res->content() if ($debug);
                 say $outfh $res->content();
             } else {
                 say "fail\n" . $res->status_line();
@@ -244,12 +250,11 @@ if ($fh->open("< $infile")) {
 
 #    @taxmap{@id} = @line;
 #    if (1) {
-#        say "\@line has " . scalar(@line) . " values";
+#        say "\@all_line has " . scalar(@all_line) . " values";
 #        say "\@id has " . scalar(@id) . " values";
-#        say "keys in taxmap: " . keys(%taxmap);
-#        exit();
+#        say "\@unique_ids has ". scalar(@unique_ids) . " values";
 #    }
-    @tax_summary = unique_count(\@all_line);
+    @tax_summary = unique_count(\@all_line,\@unique_ids,\%unique_ids);
     for my $line (@tax_summary) {
         print $line;
     }
@@ -258,8 +263,8 @@ if ($fh->open("< $infile")) {
     #
     if ($print_taxmap) {
         open(TM,">","taxmap.txt");
-        for (my $i = 0; $i < scalar(@id); ++$i) {
-            print TM $id[$i] . "\t" . $all_line[$i];# already have a new line at end
+        for (my $i = 0; $i < scalar(@unique_ids); ++$i) {
+            print TM $unique_ids[$i] . "\t" . $all_line[$i];# already have a new line at end
         }
         close(TM);
     }
@@ -274,13 +279,21 @@ unless ($keeptmp) {
 }
 
 sub unique_count {
-    my $in = shift;
+    my $lines = shift;
+    my $uids = shift;
+    my $uids_cnt = shift;
     my @out = ();
 
-    my %tax = ();
-    for my $val (@$in) {
-        ++$tax{$val};
+    for (my $i = 0; $i < scalar(@$lines); ++$i) {
+        #$uids_cnt->{$uids->[$i]}->[1] = $lines->[$i];
+        $uids_cnt->{$uids->[$i]}->[1] = $lines->[$i];
     }
+#
+    my %tax = ();
+    for my $key (keys(%$uids_cnt)) {
+        $tax{$uids_cnt->{$key}->[1]} += $uids_cnt->{$key}->[0];
+    }
+
     @out  = map ( $tax{$_} . "\t" . $_ , sort { $tax{$b} <=> $tax{$a} } keys(%tax)  );
 #    say @out;
     return @out;
