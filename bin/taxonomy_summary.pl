@@ -157,7 +157,7 @@ if ($fh->open("< $infile")) {
         my $req = HTTP::Request->new(POST => $url);
         $req->content_type('application/x-www-form-urlencoded');
 
-        my $setnum = 5;
+        my $setnum = 50;
         $outfh->close();
         for (my $set = 0; $set < scalar(@id)/$setnum; ++$set) {
 
@@ -171,7 +171,7 @@ if ($fh->open("< $infile")) {
                 $idstring .= "&id=$id[$idx]" if ($id[$idx] && $id[$idx] =~ /\w+/);
             }
 
-            say "set $set idstring: '$idstring'";
+            say "set $set idstring: '$idstring'" if ($debug);
 
             $req->content($url_params . $idstring);
 
@@ -236,11 +236,11 @@ if ($fh->open("< $infile")) {
                 $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile_part | cut -f 4 -d ';'");
             }
             @line = <$pipe>;
-            say "\@line: '@line'";
+            say "\@line: '@line'" if ($debug);
             push(@all_line,@line);
         }
     }
-    say "\@all_line: '@all_line'";
+    say "\@all_line: '@all_line'" if ($debug);
 
 #    @taxmap{@id} = @line;
 #    if (1) {
@@ -269,7 +269,7 @@ if ($fh->open("< $infile")) {
 
 $outfh->close();
 unless ($keeptmp) {
-    unlink($outfile);
+    unlink glob "$outfile" . "*";
     unlink("tempfile.$$") if ($species);
 }
 
