@@ -29,7 +29,7 @@ use IO::File;
 use IO::Pipe;
 use URI;
 
-my ($debug,$verbose,$help,$infile,$outfile,$order,$class,$family,$species,$genus,$print_taxmap,$dna);
+my ($debug,$verbose,$help,$infile,$outfile,$order,$class,$family,$species,$genus,$print_taxmap,$dna,$keeptmp);
 
 my $result = GetOptions(
     "debug"     =>  \$debug,
@@ -44,6 +44,7 @@ my $result = GetOptions(
     "species"   =>  \$species,
     "taxmap"    =>  \$print_taxmap,
     "dna"       =>  \$dna,
+    "keeptmp"   =>  \$keeptmp,
 
 );
 
@@ -82,6 +83,7 @@ my $db = $dna ? 'nucleotide' : 'protein';
 # registered eutils terms:
 my $email = 'givans@missouri.edu';
 my $tool = 'taxonomy_summary';
+$keeptmp = 1 if ($debug);
 
 my $fh = new IO::File;
 my $outfh = new IO::File;
@@ -101,20 +103,12 @@ my @line = ();
 if ($fh->open("< $infile")) {
 
     my $idcnt = 0;
-#    my %id = ();
-#    while (<$fh>) {
-#        chomp(my $val = $_);
-#        ++$id{$val};# increase tally by 1 for this ID
-#        ++$idcnt;
-#        last if ($debug && $idcnt >= 150);
-#    }
 
     while (<$fh>) {
         chomp(my $val = $_);
         #$idstring .= $val . ",";
         next unless ($val =~ /\d/); # will not include header
         if ($val =~ /\w+?\|(.+?)\|/) {
-        #if ($val =~ /\w+?\|(.+?)\./) {
             $val = $1;
         }
         $idstring .= "&id=$val" if ($val =~ /\w+/);
@@ -122,19 +116,19 @@ if ($fh->open("< $infile")) {
         ++$idcnt;
         last if ($debug && $idcnt >= 10);
     }
-    #say "idcnt = $idcnt";
-
-    #chop($idstring);        
-    #$idcnt = 201 if ($debug);
 
     my $ua = LWP::UserAgent->new();
     $ua->agent("eutils/taxonomy_summary");
     my $base = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
+    #
+    # do different types of requests depending on how many ID's we're working with
+    #
     if ($idcnt < 200) {
+        #
+        # if less than 200 ID's, we can use a simple URL-based query method
+        #
         my $uri = URI->new($base . "efetch.fcgi?db=$db&retmode=xml&id=$idstring&email=$email&tool=$tool");
-    #say $base . "efetch.fcgi?db=protein&retmode=xml" . "$idstring" if ($debug);
         say $uri->canonical() if ($debug);
-        #my $req = HTTP::Request->new(GET => $base . "efetch.fcgi?db=protein&retmode=xml&id=$idstring");
         my $req = HTTP::Request->new(GET => $uri->canonical());
 
         my $res = $ua->request($req);
@@ -146,7 +140,14 @@ if ($fh->open("< $infile")) {
             say $res->status_line();
         }
     } else {
-
+        #
+        # if more than 200 ID's, we need to submit this as a form
+        #
+        # There seems to be an upper limit for the number of ID's submitted.
+        # Going higher than that makes the result set retrieve unreliable; ie, incomplete.
+        #
+        # I'll need to wrap this in a loop to partition the requests to no more than ~500 ID's.
+        #
         my $url = $base . "efetch.fcgi";
         #my $url_params = "db=$db&rettype=xml&retmode=xml&";# including rettype changes return content to include sequence data
         my $url_params = "email=$email&tool=$tool&db=$db&retmode=xml&";
@@ -171,9 +172,11 @@ if ($fh->open("< $infile")) {
     $fh->close();
     if ($debug) {
         say "$idstring";
-#        exit();
     }
     my $pipe = new IO::Pipe;
+    #
+    # pipes will be used to run xml_grep on the files received from NCBI
+    #
     if ($species) {
 
         say "species" if ($debug);
@@ -197,6 +200,10 @@ if ($fh->open("< $infile")) {
 
         $pipe->reader("sort tempfile.$$");
 
+    #
+    # use a combination of xml_grep and cut to get specific sets of taxonomic terms
+    # from the files recieved from NCBI
+    #
     } elsif ($genus) {
         say "genus" if ($debug);
         $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile | cut -f 4,5,6,7 -d ';'");
@@ -205,7 +212,6 @@ if ($fh->open("< $infile")) {
         $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile | cut -f 4,5,6 -d ';'");
     } elsif ($order) {
         say "order" if ($debug);
-        #$pipe->reader("xml_grep --strict --text_only GBSeq_taxonomy $outfile | cut -f 4,5 -d ';' | sort | uniq -c | sort -g -k 1 -r");
         $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile | cut -f 4,5 -d ';'");
     } elsif ($class) {
         say "class" if ($debug);
@@ -214,16 +220,22 @@ if ($fh->open("< $infile")) {
     @line = <$pipe>;
     @taxmap{@id} = @line;
 #    if (1) {
+#        say "\@line has " . scalar(@line) . " values";
+#        say "\@id has " . scalar(@id) . " values";
 #        say "keys in taxmap: " . keys(%taxmap);
+#        exit();
 #    }
     @tax_summary = unique_count(\@line);
     for my $line (@tax_summary) {
         print $line;
     }
+    #
+    # print taxmap if asked to
+    #
     if ($print_taxmap) {
         open(TM,">","taxmap.txt");
-        for my $tmkey (keys(%taxmap)) {
-            print TM $tmkey . "\t" . $taxmap{$tmkey};
+        for (my $i = 0; $i < scalar(@id); ++$i) {
+            print TM $id[$i] . "\t" . $line[$i];# already have a new line at end
         }
         close(TM);
     }
@@ -232,8 +244,10 @@ if ($fh->open("< $infile")) {
 }
 
 $outfh->close();
-unlink($outfile) unless ($debug);
-unlink("tempfile.$$") if ($species);
+unless ($keeptmp) {
+    unlink($outfile);
+    unlink("tempfile.$$") if ($species);
+}
 
 sub unique_count {
     my $in = shift;
