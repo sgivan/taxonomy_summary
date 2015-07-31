@@ -100,6 +100,8 @@ my @id = ();
 my %taxmap = ();
 my @tax_summary = ();
 my @line = ();
+my @all_line = ();
+my @sets = ();
 if ($fh->open("< $infile")) {
 
     my $idcnt = 0;
@@ -123,7 +125,7 @@ if ($fh->open("< $infile")) {
     #
     # do different types of requests depending on how many ID's we're working with
     #
-    if ($idcnt < 200) {
+    if (0) {
         #
         # if less than 200 ID's, we can use a simple URL-based query method
         #
@@ -154,78 +156,100 @@ if ($fh->open("< $infile")) {
 
         my $req = HTTP::Request->new(POST => $url);
         $req->content_type('application/x-www-form-urlencoded');
-        $req->content($url_params . $idstring);
 
-        say $url . "?" . $url_params . $idstring if ($debug);
+        my $setnum = 5;
+        $outfh->close();
+        for (my $set = 0; $set < scalar(@id)/$setnum; ++$set) {
 
-        my $res = $ua->request($req);
+            $idstring = '';
+            push(@sets,$set);
+            $outfh = new IO::File;
+            my $outfile_part = $outfile . "-" . $set;
+            $outfh->open("> $outfile_part");
 
-        if ($res ->is_success()) {
-            say $res->content() if ($debug);
-            say $outfh $res->content();
-        } else {
-            say "fail\n" . $res->status_line();
+            for (my $idx = $set * $setnum; $idx < ($set * $setnum) + $setnum; ++$idx) {
+                $idstring .= "&id=$id[$idx]" if ($id[$idx] && $id[$idx] =~ /\w+/);
+            }
+
+            say "set $set idstring: '$idstring'";
+
+            $req->content($url_params . $idstring);
+
+            say $url . "?" . $url_params . $idstring if ($debug);
+
+            my $res = $ua->request($req);
+
+            if ($res ->is_success()) {
+                say $res->content() if ($debug);
+                say $outfh $res->content();
+            } else {
+                say "fail\n" . $res->status_line();
+            }
+            $outfh->close();
+
+            $fh->close();# close the input file
+            if ($debug) {
+                say "$idstring";
+            }
+            my $pipe = new IO::Pipe;
+            #
+            # pipes will be used to run xml_grep on the files received from NCBI
+            #
+            if ($species) {
+
+                say "species" if ($debug);
+                my $pipe2 = new IO::Pipe;
+                $pipe2->reader("xml_grep --strict --text_only --cond GBSeq_organism $outfile_part");
+                my @species = <$pipe2>;
+
+                my $pipe3 = new IO::Pipe;
+                $pipe3->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile_part");
+                my @lineage = <$pipe3>;
+
+                open(TEMP,">","tempfile.$$");
+
+                for (my $i = 0; $i < scalar(@lineage); ++$i) {
+                    chomp($lineage[$i]);
+                    chomp($species[$i]);
+                    say TEMP $lineage[$i] . "; " . $species[$i];
+                }
+
+                close(TEMP);
+
+                $pipe->reader("sort tempfile.$$");
+
+            #
+            # use a combination of xml_grep and cut to get specific sets of taxonomic terms
+            # from the files recieved from NCBI
+            #
+            } elsif ($genus) {
+                say "genus" if ($debug);
+                $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile_part | cut -f 4,5,6,7 -d ';'");
+            } elsif ($family) {
+                say "family" if ($debug);
+                $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile_part | cut -f 4,5,6 -d ';'");
+            } elsif ($order) {
+                say "order" if ($debug);
+                $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile_part | cut -f 4,5 -d ';'");
+            } elsif ($class) {
+                say "class" if ($debug);
+                $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile_part | cut -f 4 -d ';'");
+            }
+            @line = <$pipe>;
+            say "\@line: '@line'";
+            push(@all_line,@line);
         }
-
     }
+    say "\@all_line: '@all_line'";
 
-    $fh->close();
-    if ($debug) {
-        say "$idstring";
-    }
-    my $pipe = new IO::Pipe;
-    #
-    # pipes will be used to run xml_grep on the files received from NCBI
-    #
-    if ($species) {
-
-        say "species" if ($debug);
-        my $pipe2 = new IO::Pipe;
-        $pipe2->reader("xml_grep --strict --text_only --cond GBSeq_organism $outfile");
-        my @species = <$pipe2>;
-
-        my $pipe3 = new IO::Pipe;
-        $pipe3->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile");
-        my @lineage = <$pipe3>;
-
-        open(TEMP,">","tempfile.$$");
-
-        for (my $i = 0; $i < scalar(@lineage); ++$i) {
-            chomp($lineage[$i]);
-            chomp($species[$i]);
-            say TEMP $lineage[$i] . "; " . $species[$i];
-        }
-
-        close(TEMP);
-
-        $pipe->reader("sort tempfile.$$");
-
-    #
-    # use a combination of xml_grep and cut to get specific sets of taxonomic terms
-    # from the files recieved from NCBI
-    #
-    } elsif ($genus) {
-        say "genus" if ($debug);
-        $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile | cut -f 4,5,6,7 -d ';'");
-    } elsif ($family) {
-        say "family" if ($debug);
-        $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile | cut -f 4,5,6 -d ';'");
-    } elsif ($order) {
-        say "order" if ($debug);
-        $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile | cut -f 4,5 -d ';'");
-    } elsif ($class) {
-        say "class" if ($debug);
-        $pipe->reader("xml_grep --strict --text_only --cond GBSeq_taxonomy $outfile | cut -f 4 -d ';'");
-    }
-    @line = <$pipe>;
-    @taxmap{@id} = @line;
+#    @taxmap{@id} = @line;
 #    if (1) {
 #        say "\@line has " . scalar(@line) . " values";
 #        say "\@id has " . scalar(@id) . " values";
 #        say "keys in taxmap: " . keys(%taxmap);
 #        exit();
 #    }
-    @tax_summary = unique_count(\@line);
+    @tax_summary = unique_count(\@all_line);
     for my $line (@tax_summary) {
         print $line;
     }
@@ -235,7 +259,7 @@ if ($fh->open("< $infile")) {
     if ($print_taxmap) {
         open(TM,">","taxmap.txt");
         for (my $i = 0; $i < scalar(@id); ++$i) {
-            print TM $id[$i] . "\t" . $line[$i];# already have a new line at end
+            print TM $id[$i] . "\t" . $all_line[$i];# already have a new line at end
         }
         close(TM);
     }
