@@ -23,7 +23,7 @@ use autodie;
 use Getopt::Long; # use GetOptions function to for CL args
 use warnings;
 use strict;
-use Statistics::ChiSquare;
+use List::Vectorize qw/ :stat /;
 
 my ($debug,$verbose,$help);
 
@@ -39,13 +39,14 @@ if ($help) {
 }
 
 #my $x = [ 8, 7, 6, 5, 4, 3, 2, 1 ];
-#my $x = [ 8, 8, 8, 8, 8, 8, 8, 8 ];# total = 64
-#my $y = [ 2, 1, 5, 3, 4, 7, 8, 6 ];
-my @y = ( 2, 1, 5, 3, 4, 7, 8, 6 );
+my $x = [ 8, 8, 8, 8, 8, 8, 8, 8 ];# total = 64
+my $y = [ 2, 1, 5, 3, 4, 7, 8, 6 ];
+#my @y = ( 2, 1, 5, 3, 4, 7, 8, 6 );
 #my @y = ( 48, 4, 3, 4, 1, 1, 2, 1 );
  
-say chisquare(@y);
+my $cor = dist($x,$y,'pearson');
  
+say "cor: $cor";
 
 sub help {
 
