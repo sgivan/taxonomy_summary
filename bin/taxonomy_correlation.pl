@@ -23,7 +23,7 @@ use autodie;
 use Getopt::Long; # use GetOptions function to for CL args
 use warnings;
 use strict;
-use Statistics::Descriptive;
+use Statistics::ChiSquare;
 
 my ($debug,$verbose,$help);
 
@@ -38,19 +38,13 @@ if ($help) {
     exit(0);
 }
 
-my $stats = Statistics::Descriptive::Full->new();
-
 #my $x = [ 8, 7, 6, 5, 4, 3, 2, 1 ];
-my $x = [ 8, 8, 8, 8, 8, 8, 8, 8 ];# total = 64
+#my $x = [ 8, 8, 8, 8, 8, 8, 8, 8 ];# total = 64
 #my $y = [ 2, 1, 5, 3, 4, 7, 8, 6 ];
-my $y = [ 48, 4, 3, 4, 1, 1, 2, 1 ];
-
-$stats->add_data(@$y);
+my @y = ( 2, 1, 5, 3, 4, 7, 8, 6 );
+#my @y = ( 48, 4, 3, 4, 1, 1, 2, 1 );
  
-my @lsf = $stats->least_squares_fit((8,8,8,8,8,8,8,8));
-#my @lsf = $stats->least_squares_fit();
-
-say "Pearson linear correlation coefficient: " . $lsf[2];
+say chisquare(@y);
  
 
 sub help {
