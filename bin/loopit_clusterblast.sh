@@ -12,6 +12,7 @@ do
     stdout=$(clusterblast -f seqs -d nt -b blastn -B -a '-num_alignments 20 -num_descriptions 20' -p 2 -W)
     echo $stdout
     cd ..
+    cd ..
 done
 
 
