@@ -58,13 +58,19 @@ if (-e $infile) {
     exit(1);
 }
 
+my $toptax;
+my $cnt = 0;
 for my $line (@inlines) {
+    ++$cnt;
     my @linevals = split /\t/, $line;
     push(@y,$linevals[0]);
+    $toptax = $linevals[1] if ($cnt == 1);
 }
+chomp($toptax);
 
 if (len(\@y) <= 1) {
-    say "not enough elements in list";
+    say "not enough elements in list" if ($verbose);
+    say "undef\tundef\t$toptax";
     exit(0);
 }
 
@@ -90,10 +96,10 @@ if ($verbose) {
 #say "p-value: " . $chi->{p_value};
 if ($chi->{p_value} <= $sig) {
     say "p-value: " . $chi->{p_value} . ", significant: yes" if ($verbose);
-    say $chi->{p_value} . "\tyes";
+    say $chi->{p_value} . "\tyes\t$toptax";
 } else {
     say "p-value: " . $chi->{p_value} . ", signficant: no" if ($verbose);
-    say $chi->{p_value} . "\tno";
+    say $chi->{p_value} . "\tno\t$toptax";
 }
 
 sub help {
