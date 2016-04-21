@@ -28,8 +28,9 @@ use HTTP::Request;
 use IO::File;
 use IO::Pipe;
 use URI;
+use Data::Dumper;
 
-my ($debug,$verbose,$help,$infile,$outfile,$order,$class,$family,$species,$genus,$print_taxmap,$dna,$keeptmp);
+my ($debug,$verbose,$help,$infile,$outfile,$order,$class,$family,$species,$genus,$print_taxmap,$dna,$keeptmp,$print_seq2tax);
 
 my $result = GetOptions(
     "debug"     =>  \$debug,
@@ -45,6 +46,7 @@ my $result = GetOptions(
     "taxmap"    =>  \$print_taxmap,
     "dna"       =>  \$dna,
     "keeptmp"   =>  \$keeptmp,
+    "seq2tax"  =>  \$print_seq2tax,
 
 );
 
@@ -70,6 +72,7 @@ sub help {
     "genus"     =>  4 terms, but usually doesn't work -- use --species
     "species"   =>  list taxonomy terms to the species level
     "taxmap"    =>  print a table of gene ID -> taxonomy
+    "seq2tax"  =>  print table of sequence names -> taxonomy
     "dna"       =>  input list contains NCBI DNA ID's instead of protein ID's
 
 HELP
@@ -99,37 +102,61 @@ my $idstring = '';
 my @id = ();
 my %taxmap = ();
 my %unique_ids = ();
+my %seqID_to_tax = ();
 my @unique_ids = ();
 my @tax_summary = ();
 my @line = ();
 my @all_line = ();
 my @sets = ();
+#
+# read input file that contains sequence ID's
+# tab delimited with accession numbers in first column
+# updated format has query seq ID's in second column
+#
 if ($fh->open("< $infile")) {
 
     my $idcnt = 0;
 
     while (<$fh>) {
-        chomp(my $val = $_);
-        #$idstring .= $val . ",";
+        chomp(my $line = $_);
+        my @vals = split /\t/, $line;
+        my $val = $vals[0];
+#        chomp(my $val = $_);
+
         next unless ($val =~ /\d/); # will not include header
+        # NCBI ID's look like gb|seqid|
         if ($val =~ /\w+?\|(.+?)\|/) {
             $val = $1;
         }
+        # $val is an NCBI accession number
+        # start building URL string to post to NCBI service
         $idstring .= "&id=$val" if ($val =~ /\w+/);
         push(@id, $val);
+        # count how many times this ID occurs
+        # %unique_ids looks like:
+        # key => accession umber
+        # value => array reference, first value is count
         ++$unique_ids{$val}->[0];
+        # keep track the accesssion number associated with a sequence ID
+        # %seqID_to_tax looks like:
+        # key => sequence ID
+        # value => accession number
+        $seqID_to_tax{$vals[1]} = $val;
         ++$idcnt;
         last if ($debug && $idcnt >= 10);
     }
 
+    # get list of unique sequence IDs from %unique_ids
     @unique_ids = keys(%unique_ids);
+
+    # create user agent to interact with NCBI eutils service
     my $ua = LWP::UserAgent->new();
     $ua->agent("eutils/taxonomy_summary");
     my $base = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
     #
     # do different types of requests depending on how many ID's we're working with
     #
-    if (0) {
+    if (0) {# just do a form POST all the time
         #
         # if less than 200 ID's, we can use a simple URL-based query method
         #
@@ -152,7 +179,7 @@ if ($fh->open("< $infile")) {
         # There seems to be an upper limit for the number of ID's submitted.
         # Going higher than that makes the result set retrieve unreliable; ie, incomplete.
         #
-        # I'll need to wrap this in a loop to partition the requests to no more than ~500 ID's.
+        # I'll need to wrap this in a loop to partition the requests to no more than ~800 ID's.
         #
         my $url = $base . "efetch.fcgi";
         #my $url_params = "db=$db&rettype=xml&retmode=xml&";# including rettype changes return content to include sequence data
@@ -161,6 +188,7 @@ if ($fh->open("< $infile")) {
         my $req = HTTP::Request->new(POST => $url);
         $req->content_type('application/x-www-form-urlencoded');
 
+        # $setnum is the max number of ID's per request
         my $setnum = 800;
         $outfh->close();
         
@@ -203,6 +231,7 @@ if ($fh->open("< $infile")) {
             #
             if ($species) {
 
+                # to full taxonomy, I need to run xml_grep twice
                 say "species" if ($debug);
                 my $pipe2 = new IO::Pipe;
                 $pipe2->reader("xml_grep --strict --text_only --cond GBSeq_organism $outfile_part");
@@ -222,7 +251,8 @@ if ($fh->open("< $infile")) {
 
                 close(TEMP);
 
-                $pipe->reader("sort tempfile.$$");
+                #$pipe->reader("sort tempfile.$$");
+                $pipe->reader("cat tempfile.$$");
 
             #
             # use a combination of xml_grep and cut to get specific sets of taxonomic terms
@@ -264,9 +294,24 @@ if ($fh->open("< $infile")) {
     if ($print_taxmap) {
         open(TM,">","taxmap.txt");
         for (my $i = 0; $i < scalar(@unique_ids); ++$i) {
-            print TM $unique_ids[$i] . "\t" . $all_line[$i];# already have a new line at end
+            print TM $unique_ids[$i] . "\t" . $unique_ids{$unique_ids[$i]}->[0] . "\t" . $all_line[$i];# already have a new line at end
         }
         close(TM);
+    }
+
+    #
+    # I can pull out the taxonomy for each sequence from %unique_ids
+    #
+    if ($print_seq2tax) {
+        open(F2T,">","seq2tax.txt");
+        for my $key (keys %seqID_to_tax) {
+            say F2T "$key\t" . $seqID_to_tax{$key} . "\t" . $unique_ids{$seqID_to_tax{$key}}->[1];
+        }
+        close(F2T);
+    }
+    if ($debug) {
+        print Dumper(%unique_ids);
+        say "unique ID: CP011888.1, species: " . $unique_ids{'CP011888.1'}->[1];
     }
 } else {
     die "can't find '$infile' to read";
