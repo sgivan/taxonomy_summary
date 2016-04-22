@@ -169,6 +169,10 @@ if ($fh->open("< $infile")) {
         if ($res->is_success()) {
             #say "success";
             say $outfh $res->content();
+            if ($res->content() =~ /<Error>(.+)<\/Error>/) {
+                say "ERROR: $1";
+                exit();
+            }
         } else {
             say $res->status_line();
         }
@@ -179,7 +183,7 @@ if ($fh->open("< $infile")) {
         # There seems to be an upper limit for the number of ID's submitted.
         # Going higher than that makes the result set retrieve unreliable; ie, incomplete.
         #
-        # I'll need to wrap this in a loop to partition the requests to no more than ~800 ID's.
+        # I'll need to wrap this in a loop to partition the requests to no more than a few hundred ID's.
         #
         my $url = $base . "efetch.fcgi";
         #my $url_params = "db=$db&rettype=xml&retmode=xml&";# including rettype changes return content to include sequence data
@@ -189,7 +193,7 @@ if ($fh->open("< $infile")) {
         $req->content_type('application/x-www-form-urlencoded');
 
         # $setnum is the max number of ID's per request
-        my $setnum = 800;
+        my $setnum = 100;
         $outfh->close();
         
         #for (my $set = 0; $set < scalar(@id)/$setnum; ++$set) {
@@ -216,8 +220,13 @@ if ($fh->open("< $infile")) {
             if ($res ->is_success()) {
                 #say $res->content() if ($debug);
                 say $outfh $res->content();
+                if ($res->content() =~ /<Error>(.+)<\/Error>/) {
+                    say "ERROR: $1";
+                    exit();
+                }
             } else {
                 say "fail\n" . $res->status_line();
+                die(2);
             }
             $outfh->close();
 
@@ -305,7 +314,7 @@ if ($fh->open("< $infile")) {
     if ($print_seq2tax) {
         open(F2T,">","seq2tax.txt");
         for my $key (keys %seqID_to_tax) {
-            say F2T "$key\t" . $seqID_to_tax{$key} . "\t" . $unique_ids{$seqID_to_tax{$key}}->[1];
+            print F2T "$key\t" . $seqID_to_tax{$key} . "\t" . $unique_ids{$seqID_to_tax{$key}}->[1];# already has new line
         }
         close(F2T);
     }
@@ -330,8 +339,13 @@ sub unique_count {
     my @out = ();
 
     for (my $i = 0; $i < scalar(@$lines); ++$i) {
-        #$uids_cnt->{$uids->[$i]}->[1] = $lines->[$i];
         $uids_cnt->{$uids->[$i]}->[1] = $lines->[$i];
+#        if (defined($lines->[$i])) {
+#            chomp($lines->[$i]);
+#            $uids_cnt->{$uids->[$i]}->[1] = $lines->[$i];
+#        } else {
+#            $uids_cnt->{$uids->[$i]}->[1] = 'N/A';
+#        }
     }
 #
     my %tax = ();
