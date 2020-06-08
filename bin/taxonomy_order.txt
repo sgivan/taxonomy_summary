@@ -1,0 +1,13 @@
+20	 Sphingomonadales; Sphingomonadaceae
+17	 Rhizobiales; Methylobacteriaceae
+10	 Rhizobiales; Xanthobacteraceae
+6	 Caulobacterales; Caulobacteraceae
+5	 Rhodospirillales; Rhodospirillaceae
+3	 Burkholderiales; Burkholderiaceae
+2	 Pseudomonadales; Pseudomonadaceae
+2	 Ascomycota; Pezizomycotina
+1	 Rhizobiales; Hyphomicrobiaceae
+1	 Mycobacteriaceae; Mycobacterium
+1	 Sphingomonadales; Erythrobacteraceae
+1	
+1	 Polymorphum
