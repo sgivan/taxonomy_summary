@@ -47,6 +47,8 @@ A typical invocation of `taxonomy_summary.pl` looks like this:
 1       Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Mammalia; Eutheria; Laurasiatheria; Cetartiodactyla; Cetacea; Mysticeti; Balaenopteridae; Balaenoptera; Balaenoptera acutorostrata scammoni
 ```
 
+To `STDOUT`, the script provides a tabulated summary of taxonomy identifications.
+
 And, there will be an output file called `taxmap.txt` that looks like this:
 ```
 [11/09/20 14:29:56] submit taxonomy_summary/$ head taxmap.txt
