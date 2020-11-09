@@ -20,7 +20,7 @@
 
 use 5.010;       # use at least perl version 5.10
 use strict;
-use warnings;
+#use warnings;
 use autodie;
 use Getopt::Long; # use GetOptions function to for CL args
 use LWP::UserAgent;
@@ -82,7 +82,8 @@ HELP
 $infile = 'infile' unless ($infile);
 $outfile = "outfile.$$" unless ($outfile);
 $species = 1 unless ( $class || $order || $family || $genus);
-my $db = $dna ? 'nucleotide' : 'protein';
+#my $db = $dna ? 'nucleotide' : 'protein';
+my $db = $dna ? 'nuccore' : 'protein';
 # registered eutils terms:
 my $email = 'givans@missouri.edu';
 my $tool = 'taxonomy_summary';
@@ -152,7 +153,7 @@ if ($fh->open("< $infile")) {
     # create user agent to interact with NCBI eutils service
     my $ua = LWP::UserAgent->new();
     $ua->agent("eutils/taxonomy_summary");
-    my $base = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
+    my $base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
     #
     # do different types of requests depending on how many ID's we're working with
     #
@@ -186,9 +187,11 @@ if ($fh->open("< $infile")) {
         # I'll need to wrap this in a loop to partition the requests to no more than a few hundred ID's.
         #
         my $url = $base . "efetch.fcgi";
-        #my $url_params = "db=$db&rettype=xml&retmode=xml&";# including rettype changes return content to include sequence data
-        my $url_params = "email=$email&tool=$tool&db=$db&retmode=xml&";
+        my $url_params = "db=$db&retmode=xml&";# including rettype changes return content to include sequence data
+        my $url_params = "db=$db&retmode=xml&api_key=6ad2ae5229a12863da697058ef31e477a808&";# including rettype changes return content to include sequence data
+        #my $url_params = "email=$email&tool=$tool&db=$db&retmode=xml&";
 
+#        my $req = HTTP::Request->new(POST => $url);
         my $req = HTTP::Request->new(POST => $url);
         $req->content_type('application/x-www-form-urlencoded');
 
@@ -217,7 +220,7 @@ if ($fh->open("< $infile")) {
 
             my $res = $ua->request($req);
 
-            if ($res ->is_success()) {
+            if ($res->is_success()) {
                 #say $res->content() if ($debug);
                 say $outfh $res->content();
                 if ($res->content() =~ /<Error>(.+)<\/Error>/) {
